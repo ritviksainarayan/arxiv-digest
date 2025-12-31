@@ -32,11 +32,9 @@ def query_ads(api_key: str, days_back: int = 7, rows: int = 200) -> list:
     date_range = f"[{start_date.strftime('%Y-%m-%d')} TO {end_date.strftime('%Y-%m-%d')}]"
     
     # ADS query:
-    # - bibstem:arXiv = arXiv papers
-    # - aff:"University of Wisconsin" = affiliation search
+    # - aff:"Department of Astronomy" aff:"Wisconsin" = UW-Madison Astronomy
     # - entdate:[] = entry date range (when it appeared in ADS)
-    # - collection:astronomy = astronomy papers
-    query = f'aff:"University of Wisconsin Madison" entdate:{date_range} collection:astronomy bibstem:arXiv'
+    query = f'aff:"Department of Astronomy" aff:"Wisconsin" entdate:{date_range}'
     
     headers = {
         "Authorization": f"Bearer {api_key}",
