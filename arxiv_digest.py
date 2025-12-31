@@ -82,6 +82,21 @@ def get_arxiv_category(paper: dict) -> str:
     return "astro-ph"
 
 
+def get_uw_authors(paper: dict) -> list:
+    """Extract UW-Madison affiliated authors from a paper."""
+    authors = paper.get("author", [])
+    affiliations = paper.get("aff", [])
+    
+    uw_authors = []
+    for i, author in enumerate(authors):
+        if i < len(affiliations):
+            aff = affiliations[i].lower()
+            if "wisconsin" in aff and ("astronomy" in aff or "physics" in aff):
+                uw_authors.append(author)
+    
+    return uw_authors
+
+
 def format_paper_html(paper: dict) -> str:
     """Format a single paper as HTML."""
     
@@ -90,12 +105,16 @@ def format_paper_html(paper: dict) -> str:
     abstract = paper.get("abstract", "No abstract available.")
     url = get_arxiv_url(paper)
     category = get_arxiv_category(paper)
+    uw_authors = get_uw_authors(paper)
     
     # Format authors
     if len(authors) > 10:
         author_str = ", ".join(authors[:10]) + f" et al. ({len(authors)} authors)"
     else:
         author_str = ", ".join(authors)
+    
+    # Format UW authors
+    uw_str = ", ".join(uw_authors) if uw_authors else "Unknown"
     
     # Truncate abstract
     if len(abstract) > 500:
@@ -106,8 +125,11 @@ def format_paper_html(paper: dict) -> str:
         <h3 style="margin: 0 0 8px 0;">
             <a href="{url}" style="color: #0479a8; text-decoration: none;">{title}</a>
         </h3>
+        <p style="margin: 0 0 8px 0; color: #c5050c; font-size: 14px;">
+            <strong>UW-Madison:</strong> {uw_str}
+        </p>
         <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
-            <strong>Authors:</strong> {author_str}
+            <strong>All Authors:</strong> {author_str}
         </p>
         <p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">
             <strong>Category:</strong> {category}
@@ -127,12 +149,16 @@ def format_paper_text(paper: dict) -> str:
     abstract = paper.get("abstract", "No abstract available.")
     url = get_arxiv_url(paper)
     category = get_arxiv_category(paper)
+    uw_authors = get_uw_authors(paper)
     
     # Format authors
     if len(authors) > 10:
         author_str = ", ".join(authors[:10]) + f" et al. ({len(authors)} authors)"
     else:
         author_str = ", ".join(authors)
+    
+    # Format UW authors
+    uw_str = ", ".join(uw_authors) if uw_authors else "Unknown"
     
     # Truncate abstract
     if len(abstract) > 500:
@@ -141,7 +167,8 @@ def format_paper_text(paper: dict) -> str:
     return f"""
 {title}
 {'-' * min(len(title), 80)}
-Authors: {author_str}
+UW-Madison: {uw_str}
+All Authors: {author_str}
 Category: {category}
 Link: {url}
 
