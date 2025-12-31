@@ -2,12 +2,11 @@
 
 Automated weekly digest of astronomy papers on arXiv with UW-Madison affiliated authors.
 
-Every Wednesday, this tool queries arXiv for all `astro-ph.*` papers from the past week, filters for those with University of Wisconsin-Madison affiliations, and emails you a formatted digest.
+Every Friday, this tool queries NASA ADS for all astro-ph papers from the past week that have University of Wisconsin-Madison affiliations, and emails you a formatted digest.
 
 ## Features
 
-- Searches all astro-ph subcategories (GA, CO, EP, HE, IM, SR)
-- Detects UW-Madison affiliations using multiple patterns
+- Uses NASA ADS for reliable affiliation search
 - Nicely formatted HTML email with paper titles, authors, abstracts, and links
 - Grouped by arXiv category
 - Runs automatically via GitHub Actions (free!)
@@ -26,9 +25,16 @@ git remote set-url origin https://github.com/YOUR_USERNAME/uw-astro-arxiv-digest
 git push -u origin main
 ```
 
-### 2. Set Up Email Credentials
+### 2. Get a NASA ADS API Key
 
-You'll need an email account to send from. **Gmail with an App Password is recommended.**
+1. Go to [ui.adsabs.harvard.edu](https://ui.adsabs.harvard.edu)
+2. Create an account (or sign in with ORCID/Google)
+3. Click your name > Settings > API Token
+4. Generate and copy your token
+
+### 3. Set Up Email Credentials
+
+You'll need an email account to send from. Gmail with an App Password is recommended.
 
 #### For Gmail:
 
@@ -38,7 +44,7 @@ You'll need an email account to send from. **Gmail with an App Password is recom
 4. Create a new app password for "Mail"
 5. Copy the 16-character password
 
-### 3. Add GitHub Secrets
+### 4. Add GitHub Secrets
 
 In your GitHub repository:
 
@@ -47,18 +53,19 @@ In your GitHub repository:
 
 | Secret Name | Value |
 |------------|-------|
+| `ADS_API_KEY` | Your NASA ADS API token |
 | `SENDER_EMAIL` | Your Gmail address (e.g., `yourname@gmail.com`) |
-| `SENDER_PASSWORD` | The 16-character app password from step 2 |
+| `SENDER_PASSWORD` | The 16-character app password |
 | `RECIPIENT_EMAIL` | Where to send the digest (can be the same as sender) |
 | `SMTP_SERVER` | `smtp.gmail.com` (for Gmail) |
 | `SMTP_PORT` | `587` |
 
-### 4. Enable GitHub Actions
+### 5. Enable GitHub Actions
 
 1. Go to the **Actions** tab in your repository
 2. Click "I understand my workflows, go ahead and enable them"
 
-### 5. Test It
+### 6. Test It
 
 1. Go to **Actions** > **Weekly Astro-ph Digest**
 2. Click **Run workflow**
@@ -84,17 +91,15 @@ Examples:
 - `'0 16 * * 1'` - Mondays at 4pm UTC
 - `'0 16 * * 1,5'` - Mondays and Fridays at 4pm UTC
 
-### Modifying Affiliation Detection
+### Modifying the Affiliation Search
 
-Edit `arxiv_digest.py` to add or modify the `UW_PATTERNS` list:
+Edit `arxiv_digest.py` and change the query in the `query_ads` function:
 
 ```python
-UW_PATTERNS = [
-    r"university of wisconsin.*madison",
-    r"uw[- ]?madison",
-    # Add more patterns here
-]
+query = f'aff:"University of Wisconsin Madison" entdate:{date_range} collection:astronomy bibstem:arXiv'
 ```
+
+You can adjust the affiliation string or add additional constraints using [ADS search syntax](https://ui.adsabs.harvard.edu/help/search/search-syntax).
 
 ### Using a Different Email Provider
 
@@ -113,6 +118,7 @@ Update the `SMTP_SERVER` and `SMTP_PORT` secrets:
 pip install -r requirements.txt
 
 # Set environment variables
+export ADS_API_KEY="your-ads-api-key"
 export SENDER_EMAIL="your@email.com"
 export SENDER_PASSWORD="your-app-password"
 export RECIPIENT_EMAIL="recipient@email.com"
@@ -126,14 +132,9 @@ python arxiv_digest.py
 Or run without email (just prints to console):
 
 ```bash
+export ADS_API_KEY="your-ads-api-key"
 python arxiv_digest.py
 ```
-
-## Limitations
-
-- arXiv API doesn't always provide clean affiliation data, so detection relies on patterns in author names, comments, and abstracts
-- Some papers may be missed if authors don't include their affiliation
-- Rate limited to arXiv API guidelines
 
 ## Example Output
 
@@ -144,7 +145,7 @@ The email includes:
 - For each paper:
   - Title (linked to arXiv)
   - Authors
-  - Categories
+  - Category
   - Abstract snippet
 
 ## License
