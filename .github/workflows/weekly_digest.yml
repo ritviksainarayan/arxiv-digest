@@ -33,6 +33,7 @@ jobs:
       
       - name: Run digest script
         env:
+          ADS_API_KEY: ${{ secrets.ADS_API_KEY }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
@@ -40,3 +41,4 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           DAYS_BACK: ${{ github.event.inputs.days_back || '7' }}
         run: python arxiv_digest.py
+
