@@ -96,10 +96,16 @@ Examples:
 Edit `arxiv_digest.py` and change the query in the `query_ads` function:
 
 ```python
-query = f'aff:"University of Wisconsin Madison" entdate:{date_range} collection:astronomy bibstem:arXiv'
+query = f'aff:"Department of Astronomy" aff:"Wisconsin" entdate:{date_range}'
 ```
 
-You can adjust the affiliation string or add additional constraints using [ADS search syntax](https://ui.adsabs.harvard.edu/help/search/search-syntax).
+This searches for papers where authors have both "Department of Astronomy" and "Wisconsin" in their affiliation. You can adjust these terms or add additional constraints using [ADS search syntax](https://ui.adsabs.harvard.edu/help/search/search-syntax).
+
+To include the Physics department as well, you could use:
+
+```python
+query = f'(aff:"Department of Astronomy" OR aff:"Department of Physics") aff:"Wisconsin" entdate:{date_range}'
+```
 
 ### Using a Different Email Provider
 
