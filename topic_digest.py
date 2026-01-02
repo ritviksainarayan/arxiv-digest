@@ -54,20 +54,29 @@ HIGH_VALUE_KEYWORDS = [
 # Silly encouraging welcome messages
 WELCOME_MESSAGES = [
     "🏃‍♀️ Step by step, paper by paper. You're literally ascending while reading about the cosmos. Iconic.",
-    "⭐ The stars aligned for your workout AND your inbox. Let's get this bread (and this literature review).",
-    "🚀 Cardio + astro-ph = the only acceptable form of multitasking. You're doing amazing, sweetie.",
+    "⭐ The stars aligned for your workout AND your inbox. Let's get this bread (and stay up-to-date on your literature review).",
+    "🚀 Cardio + astro-ph = an insane form of multitasking. You're a rockstar.",
     "🌟 Fun fact: reading papers on a stepmill burns mass, just like a star. You're basically a main sequence queen.",
-    "💪 Other people scroll Instagram at the gym. You read about stellar rotation. We are not the same.",
+    "💪 Other people scroll Instagram at the gym. You read about stellar evolution. We are not the same.",
     "🔭 Your heart rate is up, your knowledge is expanding. The universe is proud of you.",
     "✨ Every step you take is one step closer to tenure and one step up the stepmill. Synergy!",
     "🌙 The Moon's escape velocity is 2.38 km/s. Your's must be higher because NOTHING can stop you.",
     "⚡ You're generating more power than a brown dwarf right now. Keep climbing!",
-    "🎯 Peer review your form, cite your sources, crush this workout. In that order.",
-    "🌠 Somewhere, a committee is meeting without you. But you? You're ASCENDING (the stepmill).",
+    "🍕 You could be eating pizza in bed. But no. You're on the stepmill. Reading about LITHIUM DEPLETION.",
+    "🌠 Somewhere, a committee is meeting without you. But you? You're ASCENDING the stepmill.",
     "💫 Hot take: the stepmill is just a really boring rocket. You're training for space.",
     "🏔️ Sir Edmund Hillary climbed Everest. You're climbing a stepmill in Wisconsin. Both required questionable judgment and excellent cardiovascular fitness.",
     "🔥 Your VO2 max called. It said 'thank you for the gains and the gyrochronology.'",
-    "🎢 This is the only acceptable way to read about rotational evolution: while rotating (your legs).",
+    "🎢 This is the only acceptable way to read about rotational evolution.",
+    "🎪 Welcome to the circus: you're a tenure-track professor reading arXiv on a stepmill at 6am. The clown makeup is optional.",
+    "🔭 In the time it takes you to finish this stepmill session, light from the Sun will have traveled about 2.4 AU. You will have traveled about 40 floors. Both are valid units of progress.",
+    "💪 Sisyphus pushed a boulder up a hill for eternity, but did he do it while reading astro-ph?",
+    "☕ You could be drinking hot cocoa and relaxing. Instead you're sweating and reading about chromospheric activity. Your choices are questionable.",
+    "🧗 The stepmill has no summit. The literature has no end. Your dedication has no explanation. We climb anyway.",
+    "🎰 Every paper is a slot machine. Will it be relevant? Will it scoop you? Will it cite you? Spin the wheel. Read the abstract. Feel something.",
+    "🚿 You will forget 80% of these abstracts by the time you shower. This is not a personal failing. This is the human condition. We read anyway.",
+    "🔬 Studies show that reading papers on a stepmill increases comprehension by 0%. But it does make you feel like a high-achieving weirdo, and honestly that's worth something.",
+    "🌙 Tonight's forecast: 85% chance of you lying awake thinking about that one weird result in paper #3. But that's future you's problem."
 ]
 
 # Bottom treasures (rewards for reading to the end)
@@ -86,6 +95,7 @@ BOTTOM_TREASURES = [
     ("🌈 WHOLESOME MOMENT", "Hey. Genuinely. It's hard to keep up with the literature while doing everything else. The fact that you're trying means a lot. You're doing great. 💜"),
     ("🎰 SLOT MACHINE", "🍒🍒🍒 JACKPOT! You won: the knowledge from all these abstracts, leg strength, and this nice message. Cash out anytime (close email)."),
     ("📜 ANCIENT WISDOM", "Confucius say: Scholar who reads on stepmill achieves enlightenment AND glutes. This is definitely a real quote."),
+    ("📧 META MOMENT: You're reading a silly message at the bottom of an automated email you built yourself. You engineered your own dopamine hit. That's either genius or a cry for help. Probably both."),
     ("🛸 ALIEN MESSAGE", "GREETINGS HUMAN. WE HAVE OBSERVED YOUR DEDICATION TO BOTH PHYSICAL AND INTELLECTUAL PURSUITS. YOU WILL BE SPARED DURING THE INVASION. jk great job reading!"),
 ]
 
