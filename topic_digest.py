@@ -117,7 +117,7 @@ def build_query(days_back: int = 7) -> str:
     query = (
         f'(arxiv_class:"astro-ph.EP" OR arxiv_class:"astro-ph.SR" OR {keyword_clauses}) '
         f'AND entdate:{date_range} '
-        f'AND ({exclusions})'
+        f'{exclusions}'
     )
 
     return query
