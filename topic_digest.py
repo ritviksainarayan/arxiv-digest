@@ -30,6 +30,9 @@ TOPIC_KEYWORDS = [
     "stellar rotation",
     "exoplanet age",
     "planetary engulfment",
+    "free-floating planet",
+    "planet engulfment",
+    "engulfment",
     "young stars",
     "TESS photometry",
     "stellar age",
@@ -37,16 +40,27 @@ TOPIC_KEYWORDS = [
     "starspot",
     "chromospheric activity",
     "lithium depletion",
+    "lithium abundance",
+    "lithium",
+    "stellar pollution",
+    "chemical abundance",
+    "convective zone",
+    "convective envelope",
 ]
 
 # High-value keywords (extra relevance points)
 HIGH_VALUE_KEYWORDS = [
     "gyrochronology",
     "planetary engulfment",
+    "planet engulfment",
+    "engulfment",
     "lithium depletion",
+    "lithium abundance",
     "stellar age",
     "young planet",
+    "stellar pollution",
 ]
+
 
 # Silly encouraging welcome messages
 WELCOME_MESSAGES = [
