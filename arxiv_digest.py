@@ -94,12 +94,11 @@ def query_ads(api_key: str, days_back: int = 7, rows: int = 200, debug: bool = F
     
     date_range = f"[{start_date.strftime('%Y-%m-%d')} TO {end_date.strftime('%Y-%m-%d')}]"
     
-    # Simpler ADS query - just search for UW-Madison affiliations
-    # We'll filter for astro-ph in post-processing since the arxiv_class query syntax seems unreliable
+    # Simpler ADS query using unquoted terms for flexible matching
+    # aff:Wisconsin aff:Madison matches affiliations containing both words anywhere
+    # We filter for astro-ph and confirm UW-Madison in post-processing
     query = (
-        f'(aff:"University of Wisconsin-Madison" OR aff:"University of Wisconsin, Madison" '
-        f'OR aff:"University of Wisconsin - Madison" OR aff:"UW-Madison" OR aff:"UW Madison" '
-        f'OR institution:"Univ Wisconsin Madison") '
+        f'aff:Wisconsin aff:Madison '
         f'(entdate:{date_range} OR pubdate:{date_range})'
     )
     
