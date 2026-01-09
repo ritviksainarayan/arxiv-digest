@@ -94,14 +94,15 @@ def query_ads(api_key: str, days_back: int = 7, rows: int = 200) -> list:
     
     date_range = f"[{start_date.strftime('%Y-%m-%d')} TO {end_date.strftime('%Y-%m-%d')}]"
     
-    # Broader ADS query to catch various affiliation formats:
-    # - "Wisconsin" AND "Madison" anywhere in affiliation
-    # - OR the institutional identifier
-    # No bibstem/journal filter since arXiv preprints can be indexed inconsistently
+    # ADS query:
+    # - Affiliation matching for UW-Madison
+    # - Filtered to astronomy/astrophysics content via arXiv class or journal
     query = (
         f'(aff:"Wisconsin" aff:"Madison" OR aff:"UW-Madison" OR aff:"UW Madison" '
         f'OR institution:"Univ Wisconsin Madison") '
-        f'entdate:{date_range}'
+        f'entdate:{date_range} '
+        f'(arxiv_class:astro-ph.* OR bibstem:(ApJ OR ApJL OR ApJS OR AJ OR MNRAS OR '
+        f'A&A OR PASP OR ARA&A OR Icar OR PSJ OR NatAs OR Sci OR Natur))'
     )
     
     headers = {
