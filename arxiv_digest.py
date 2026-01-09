@@ -99,12 +99,11 @@ def query_ads(api_key: str, days_back: int = 7, rows: int = 200) -> list:
     # Broader ADS query to catch various affiliation formats:
     # - "Wisconsin" AND "Madison" anywhere in affiliation
     # - OR the institutional identifier
-    # - Limited to astro-ph papers
+    # No bibstem/journal filter since arXiv preprints can be indexed inconsistently
     query = (
         f'(aff:"Wisconsin" aff:"Madison" OR aff:"UW-Madison" OR aff:"UW Madison" '
         f'OR institution:"Univ Wisconsin Madison") '
-        f'entdate:{date_range} '
-        f'bibstem:(ApJ OR ApJL OR ApJS OR AJ OR MNRAS OR A&A OR PASP OR ARA&A OR arXiv)'
+        f'entdate:{date_range}'
     )
     
     headers = {
