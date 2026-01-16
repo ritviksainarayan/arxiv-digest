@@ -24,6 +24,8 @@ PRIORITY_ORCIDS = [
     "0009-0007-0488-5685", # Ritvik Sai Narayan
     "0000-0001-7493-7419",  # Melinda Soares-Furtado
     "0009-0001-1360-8547", # Julia Sheffler
+    "0000-0001-7246-5438", # Andrew Vanderburg
+    "
 ]
 
 # Topic keywords to search for (also used for relevance scoring)
@@ -63,8 +65,7 @@ TOPIC_KEYWORDS = [
     "transiting exoplanet",
     "high-precision radial velocity",
     "asteroseismology",
-
-    # Roman + exoplanets (no microlensing)
+    # Roman + exoplanets 
     "Nancy Grace Roman Space Telescope",
     "Roman Space Telescope",
     "Roman wide field instrument",
@@ -109,15 +110,7 @@ HIGH_VALUE_KEYWORDS = [
     "stellar age",
     "young planet",
     "stellar pollution",
-
-    # Roman CGI / direct imaging + rigorous inference
     "exoplanet yield",
-    "survey optimization",
-    "hierarchical Bayesian",
-    "completeness correction",
-    "selection function",
-    "occurrence rate inference",
-    "injection-recovery",
 ]
 
 
