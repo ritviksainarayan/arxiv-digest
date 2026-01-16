@@ -1,11 +1,6 @@
 # Astro-ph arXiv Digests
 
-Automated email digests of astronomy papers from arXiv/NASA ADS. This repo contains two independent digests:
-
-1. **Weekly UW-Madison Digest** - All astro-ph papers with UW-Madison affiliated authors (Fridays)
-2. **Daily Topic Digest** - Papers matching your research interests, with relevance scoring (Daily)
-
-Both run automatically via GitHub Actions (free!) and share the same secrets.
+**Daily Topic Digest** - Papers matching your research interests, with relevance scoring (Daily)
 
 ## Features
 
