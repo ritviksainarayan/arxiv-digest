@@ -181,7 +181,7 @@ def build_query(days_back: int = 7) -> str:
         "cond-mat.stat-mech", "cond-mat.str-el", "cond-mat.supr-con",
         "astro-ph.GA", "astro-ph.CO", "astro-ph.HE", "physics.app-ph",
         "physics.flu-dyn", "physics.ins-det", "physics.plasm-ph", "math.QA",
-        
+        "cs.NE", "math.PR", "cs.CE", "math.FA", "math.LO", "cs.HC",
     ]    
     
     exclusions = " ".join([f'-arxiv_class:"{cat}"' for cat in EXCLUDE_CATEGORIES])
