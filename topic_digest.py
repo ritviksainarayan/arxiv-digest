@@ -31,8 +31,8 @@ PRIORITY_ORCIDS = [
 TOPIC_KEYWORDS = [
     "open cluster",
     "MESA",
+    "stellar rotation"
     "NGC 188",
-    "orbital architecture",
     "m dwarf",
     "gyrochronology",
     "stellar rotation",
