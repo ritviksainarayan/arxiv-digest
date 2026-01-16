@@ -25,7 +25,6 @@ PRIORITY_ORCIDS = [
     "0000-0001-7493-7419",  # Melinda Soares-Furtado
     "0009-0001-1360-8547", # Julia Sheffler
     "0000-0001-7246-5438", # Andrew Vanderburg
-    "
 ]
 
 # Topic keywords to search for (also used for relevance scoring)
