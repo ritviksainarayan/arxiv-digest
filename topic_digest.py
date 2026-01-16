@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
 """
-Daily Topic-Based Astro-ph Digest
+Daily Topic-Based Astro-ph Digest (SR/EP only)
 
-Queries NASA ADS for astro-ph.SR / astro-ph.EP papers matching research interests,
-with priority sorting for specific authors by ORCID.
-
-Key fixes vs typical implementations:
-- Hard restricts to astro-ph.SR / astro-ph.EP and requires keyword match in title/abstract
-- Uses ADS `orcid:<ORCID>` queries to reliably surface priority-author papers
-- Priority-first sorting (guaranteed top placement), then relevance, then recency
+Queries NASA ADS for recent papers matching research interests.
+Robust to ADS query-length limits by batching keyword queries and merging results.
+Priority ORCID authors are pinned to the top of the digest.
 """
 
 import os
 import ssl
 import random
 import smtplib
-import requests
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import requests
 
-# -------------------------
+
+# -----------------------
 # ADS API configuration
-# -------------------------
+# -----------------------
 ADS_API_URL = "https://api.adsabs.harvard.edu/v1/search/query"
 
 # Priority ORCIDs - papers by these authors appear at the top
@@ -118,6 +115,9 @@ HIGH_VALUE_KEYWORDS = [
     "exoplanet yield",
 ]
 
+# How many keywords per ADS query (keeps q length safely small)
+KEYWORDS_PER_QUERY = int(os.environ.get("KEYWORDS_PER_QUERY", "12"))
+
 # Silly encouraging welcome messages
 WELCOME_MESSAGES = [
     "🏃‍♀️ Step by step, paper by paper. You're literally ascending while reading about the cosmos. Iconic.",
@@ -130,49 +130,18 @@ WELCOME_MESSAGES = [
     "🌙 The Moon's escape velocity is 2.38 km/s. Your's must be higher because NOTHING can stop you.",
     "⚡ You're generating more power than a brown dwarf right now. Keep climbing!",
     "🍕 You could be eating pizza in bed. But no. You're on the stepmill. Reading about LITHIUM DEPLETION.",
-    "🌠 Somewhere, a committee is meeting without you. But you? You're ASCENDING the stepmill.",
-    "💫 Hot take: the stepmill is just a really boring rocket. You're training for space.",
-    "🏔️ Sir Edmund Hillary climbed Everest. You're climbing a stepmill in Wisconsin. Both required questionable judgment and excellent cardiovascular fitness.",
-    "🔥 Your VO2 max called. It said 'thank you for the gains and the gyrochronology.'",
-    "🎢 This is the only acceptable way to read about rotational evolution.",
-    "🎪 Welcome to the circus: you're a tenure-track professor reading arXiv on a stepmill at 6am. The clown makeup is optional.",
-    "🔭 In the time it takes you to finish this stepmill session, light from the Sun will have traveled about 2.4 AU. You will have traveled about 40 floors. Both are valid units of progress.",
-    "💪 Sisyphus pushed a boulder up a hill for eternity, but did he do it while reading astro-ph?",
-    "☕ You could be drinking hot cocoa and relaxing. Instead you're sweating and reading about chromospheric activity. Your choices are questionable.",
-    "🧗 The stepmill has no summit. The literature has no end. Your dedication has no explanation. We climb anyway.",
-    "🎰 Every paper is a slot machine. Will it be relevant? Will it scoop you? Will it cite you? Spin the wheel. Read the abstract. Feel something.",
-    "🚿 You will forget 80% of these abstracts by the time you shower. This is not a personal failing. This is the human condition. We read anyway.",
-    "🔬 Studies show that reading papers on a stepmill increases comprehension by 0%. But it does make you feel like a high-achieving weirdo, and honestly that's worth something.",
-    "🌙 Tonight's forecast: 85% chance of you lying awake thinking about that one weird result in paper #3. But that's future you's problem.",
 ]
 
-# Bottom treasures (rewards for reading to the end)
 BOTTOM_TREASURES = [
-    ("🗓️ CALENDAR INVITE", "Event: Read arXiv digest on stepmill. When: Tomorrow. And the next day. Recurring: Forever. Attendees: Just you. Location: The void (the gym). RSVP: You already did."),
-    ("🪐 COSMIC PERSPECTIVE", "In 5 billion years, the Sun will expand and engulf the Earth. None of these papers will matter. But you read them anyway. That's either beautiful or stupid. Probably both."),
     ("🏁 FINISH LINE", "You crossed it. There's no medal. There's no ceremony. There's just the quiet satisfaction of knowing you read an entire digest while climbing to nowhere."),
-    ("🗺️ YOU ARE HERE", "Congratulations. You've reached the bottom of an email, the peak of a fake mountain, and probably the limit of your quads' patience. Plant your flag. You earned it."),
-    ("🎉 YOU MADE IT!", "Congratulations! You scrolled through the whole digest. Your dedication to the literature is matched only by your cardiovascular endurance. Gold star for you: ⭐"),
-    ("🔮 FORTUNE COOKIE", "Your astronomy fortune: 'A paper you cite today will cite you back within 5 years.' Lucky numbers: 42, 3.14, 6.67×10⁻¹¹"),
-    ("🦖 PALEO-ASTRONOMY FACT", "65 million years ago, a T-Rex could have looked up and seen different constellations. The Big Dipper didn't exist yet. Anyway, great job finishing this email!"),
-    ("🎵 STUCK IN YOUR HEAD", "🎵 We didn't start the fire / It was always burning since the stellar core was churning 🎵 You're welcome. And congrats on finishing!"),
     ("🏆 ACHIEVEMENT UNLOCKED", "'+1 Literature Awareness' - You have gained 50 XP in the skill 'Keeping Up With The Field.' Only 9,950 more XP until you feel caught up!"),
-    ("🌶️ HOT TAKE ZONE", "Controversial opinion: log(g) should be called 'surface gravity vibe check.' Thank you for coming to my TED talk at the bottom of this email."),
-    ("🎲 D&D STATS UPDATE", "Your literature review stats this week: STR +1 (from stepmill), INT +3 (from papers), WIS +2 (knowing to combine them). Roll for initiative on your next paper."),
-    ("🐛 BUG REPORT", "ERROR 418: You have reached the bottom of the email. This is not a bug, it's a feature. Status: Proud of you."),
-    ("📊 FAKE STATISTICS", "Studies show that 94% of astronomers who read digests on stepmills publish 3x more papers. (Source: I made it up. But you DID finish this email.)"),
-    ("🎬 MOVIE PITCH", "STEPMILL ASTRONOMER: One woman. One machine. 47 abstracts. Coming this summer. Starring you. You're the hero of this story."),
-    ("🧪 EXPERIMENT RESULTS", "Hypothesis: You would read this whole email. Method: Sent email. Results: You're reading this. Conclusion: Hypothesis confirmed. P-value: very significant."),
     ("🌈 WHOLESOME MOMENT", "Hey. Genuinely. It's hard to keep up with the literature while doing everything else. The fact that you're trying means a lot. You're doing great. 💜"),
-    ("🎰 SLOT MACHINE", "🍒🍒🍒 JACKPOT! You won: the knowledge from all these abstracts, leg strength, and this nice message. Cash out anytime (close email)."),
-    ("📧 META MOMENT: You're reading a silly message at the bottom of an automated email you built yourself. You engineered your own dopamine hit. That's either genius or a cry for help. Probably both."),
-    ("🛸 ALIEN MESSAGE", "GREETINGS HUMAN. WE HAVE OBSERVED YOUR DEDICATION TO BOTH PHYSICAL AND INTELLECTUAL PURSUITS. YOU WILL BE SPARED DURING THE INVASION. jk great job reading!"),
 ]
 
 
-# -------------------------
-# Helpers: keyword hygiene
-# -------------------------
+# -----------------------
+# Utility helpers
+# -----------------------
 def unique_preserve(seq):
     seen = set()
     out = []
@@ -183,147 +152,9 @@ def unique_preserve(seq):
     return out
 
 
-TOPIC_KEYWORDS = unique_preserve(TOPIC_KEYWORDS)
-HIGH_VALUE_KEYWORDS = unique_preserve(HIGH_VALUE_KEYWORDS)
-
-HIGH_VALUE_LOWER = {k.lower() for k in HIGH_VALUE_KEYWORDS}
-TOPIC_LOWER = [k.lower() for k in TOPIC_KEYWORDS]
-
-
-def _escape_ads_phrase(s: str) -> str:
-    # Keep it simple: escape double quotes to not break phrase queries.
-    return s.replace('"', r'\"').strip()
-
-
-def _date_range(days_back: int) -> str:
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days_back)
-    return f"[{start_date.strftime('%Y-%m-%d')} TO {end_date.strftime('%Y-%m-%d')}]"
-
-
-def build_keyword_clause() -> str:
-    """(title:"kw" OR abs:"kw") OR ..."""
-    parts = []
-    for kw in TOPIC_KEYWORDS:
-        kw2 = _escape_ads_phrase(kw)
-        if kw2:
-            parts.append(f'(title:"{kw2}" OR abs:"{kw2}")')
-    # If somehow empty, fall back to a broad SR/EP query (but should not happen)
-    return " OR ".join(parts) if parts else '(title:"star" OR abs:"star")'
-
-
-def build_query(days_back: int = 7) -> str:
-    """Hard restrict to astro-ph.SR/EP, require keyword match in title/abstract."""
-    date_range = _date_range(days_back)
-    keyword_clause = build_keyword_clause()
-    sr_ep_only = '(arxiv_class:"astro-ph.SR" OR arxiv_class:"astro-ph.EP")'
-    return f'{sr_ep_only} AND ({keyword_clause}) AND entdate:{date_range}'
-
-
-def build_priority_orcid_query(orcid_id: str, days_back: int = 7) -> str:
-    """Query using ADS ORCID index + same SR/EP + same keyword clause."""
-    date_range = _date_range(days_back)
-    keyword_clause = build_keyword_clause()
-    sr_ep_only = '(arxiv_class:"astro-ph.SR" OR arxiv_class:"astro-ph.EP")'
-    # ADS ORCID search syntax: orcid:<id>  (see ADS ORCID help)
-    return f'{sr_ep_only} AND orcid:{orcid_id} AND ({keyword_clause}) AND entdate:{date_range}'
-
-
-# -------------------------
-# ADS access
-# -------------------------
-def query_ads(api_key: str, q: str, rows: int = 500) -> list:
-    headers = {"Authorization": f"Bearer {api_key}"}
-    params = {
-        "q": q,
-        "fl": (
-            "title,author,aff,abstract,bibcode,identifier,keyword,pubdate,"
-            "arxiv_class,orcid_pub,orcid_user,orcid_other"
-        ),
-        "rows": rows,
-        "sort": "date desc",
-    }
-    r = requests.get(ADS_API_URL, headers=headers, params=params, timeout=30)
-    r.raise_for_status()
-    return r.json().get("response", {}).get("docs", [])
-
-
-def query_topic_papers(api_key: str, days_back: int = 7, rows: int = 500) -> list:
-    q = build_query(days_back)
-    return query_ads(api_key, q, rows=rows)
-
-
-def query_priority_papers(api_key: str, days_back: int = 7, rows_each: int = 200) -> list:
-    """Pull papers by priority ORCIDs via ADS ORCID index, then merge later."""
-    out = []
-    for oid in PRIORITY_ORCIDS:
-        q = build_priority_orcid_query(oid, days_back)
-        try:
-            out.extend(query_ads(api_key, q, rows=rows_each))
-        except requests.RequestException as e:
-            print(f"Warning: ORCID query failed for {oid}: {e}")
-    return out
-
-
-# -------------------------
-# Paper utilities
-# -------------------------
-def get_arxiv_id(paper: dict) -> str | None:
-    identifiers = paper.get("identifier", []) or []
-    for ident in identifiers:
-        if isinstance(ident, str) and ident.startswith("arXiv:"):
-            return ident.replace("arXiv:", "")
-    return None
-
-
-def get_arxiv_url(paper: dict) -> str:
-    arxiv_id = get_arxiv_id(paper)
-    if arxiv_id:
-        return f"https://arxiv.org/abs/{arxiv_id}"
-    bibcode = paper.get("bibcode", "") or ""
-    return f"https://ui.adsabs.harvard.edu/abs/{bibcode}"
-
-
-def get_arxiv_category(paper: dict) -> str:
-    classes = paper.get("arxiv_class", []) or []
-    if classes:
-        return classes[0]
-    return "astro-ph"
-
-
-def get_paper_orcids(paper: dict) -> set[str]:
-    """All ORCIDs attached to this record (if present)."""
-    orcids = set()
-    for field in ("orcid_pub", "orcid_user", "orcid_other"):
-        values = paper.get(field, []) or []
-        for orcid in values:
-            if orcid and orcid != "-":
-                orcids.add(orcid)
-    return orcids
-
-
-def has_priority_author(paper: dict) -> bool:
-    return bool(get_paper_orcids(paper).intersection(PRIORITY_ORCIDS))
-
-
-def get_priority_authors(paper: dict) -> list[str]:
-    """
-    Best-effort: map indexed ORCID fields onto author list when possible.
-    ADS often uses '-' placeholders to preserve author alignment.
-    """
-    authors = paper.get("author", []) or []
-    priority_authors = []
-
-    for field in ("orcid_pub", "orcid_user", "orcid_other"):
-        orcids = paper.get(field, []) or []
-        for i, orcid in enumerate(orcids):
-            if orcid in PRIORITY_ORCIDS and i < len(authors):
-                name = authors[i]
-                if name not in priority_authors:
-                    priority_authors.append(name)
-
-    # Fallback: if ORCIDs exist but aren't aligned to author indices, show none
-    return priority_authors
+def chunked(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i : i + n]
 
 
 def _parse_pubdate(paper: dict) -> datetime:
@@ -334,83 +165,176 @@ def _parse_pubdate(paper: dict) -> datetime:
         return datetime.min
 
 
-# -------------------------
-# Relevance scoring + sorting
-# -------------------------
+# -----------------------
+# ADS query building
+# -----------------------
+def _ads_quote(kw: str) -> str:
+    # Keep phrases safe inside quotes
+    kw = kw.replace('"', '\\"')
+    return f'"{kw}"'
+
+
+def build_query(days_back: int, keywords_subset: list[str]) -> str:
+    """
+    Build a short ADS query:
+      - restrict to astro-ph.SR or astro-ph.EP
+      - restrict by entdate window
+      - require a match in the ADS 'abs' combo field (title+abstract+keyword)
+    """
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days_back)
+    date_range = f"[{start_date.strftime('%Y-%m-%d')} TO {end_date.strftime('%Y-%m-%d')}]"
+
+    # ADS "abs" is a combo field (title+abstract+keyword), so this is much shorter
+    # than repeating (title OR abs) for every keyword.
+    kw_terms = " OR ".join(_ads_quote(k) for k in keywords_subset)
+    kw_clause = f"abs:({kw_terms})"
+
+    sr_ep_only = '(arxiv_class:"astro-ph.SR" OR arxiv_class:"astro-ph.EP")'
+
+    return f"{sr_ep_only} AND {kw_clause} AND entdate:{date_range}"
+
+
+def query_ads(api_key: str, q: str, rows: int = 200) -> list[dict]:
+    """POST to ADS search API (avoids URL-length limits)."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "q": q,
+        "fl": "title,author,aff,abstract,bibcode,identifier,keyword,pubdate,arxiv_class,orcid_pub,orcid_user,orcid_other",
+        "rows": rows,
+        "sort": "date desc",
+    }
+    r = requests.post(ADS_API_URL, headers=headers, json=payload, timeout=60)
+    r.raise_for_status()
+    return r.json().get("response", {}).get("docs", [])
+
+
+def query_topic_papers(api_key: str, days_back: int = 1, rows: int = 500) -> list[dict]:
+    """
+    Run multiple ADS queries over keyword chunks and merge by bibcode.
+    """
+    kws = unique_preserve(TOPIC_KEYWORDS)
+    merged = {}
+    per_query_rows = max(50, rows // max(1, (len(kws) + KEYWORDS_PER_QUERY - 1) // KEYWORDS_PER_QUERY))
+
+    for subset in chunked(kws, KEYWORDS_PER_QUERY):
+        q = build_query(days_back, subset)
+        docs = query_ads(api_key, q, rows=per_query_rows)
+        for d in docs:
+            bc = d.get("bibcode")
+            if bc:
+                merged[bc] = d
+
+    return list(merged.values())
+
+
+# -----------------------
+# ORCID + relevance
+# -----------------------
+def get_paper_orcids(paper: dict) -> set:
+    orcids = set()
+    for field in ("orcid_pub", "orcid_user", "orcid_other"):
+        for oid in paper.get(field, []) or []:
+            if oid and oid != "-":
+                orcids.add(oid)
+    return orcids
+
+
+def has_priority_author(paper: dict) -> bool:
+    return bool(get_paper_orcids(paper).intersection(PRIORITY_ORCIDS))
+
+
+def get_priority_authors(paper: dict) -> list:
+    authors = paper.get("author", []) or []
+    priority_authors = []
+    for field in ("orcid_pub", "orcid_user", "orcid_other"):
+        orcids = paper.get(field, []) or []
+        for i, oid in enumerate(orcids):
+            if oid in PRIORITY_ORCIDS and i < len(authors):
+                if authors[i] not in priority_authors:
+                    priority_authors.append(authors[i])
+    return priority_authors
+
+
 def calculate_relevance_score(paper: dict) -> int:
     score = 0
-    title = (paper.get("title", [""]) or [""])[0].lower()
-    abstract = (paper.get("abstract", "") or "").lower()
+    title = (paper.get("title", [""])[0] or "").lower()
+    abstract = (paper.get("abstract") or "").lower()
 
-    # Priority author: moderate bonus (not automatic must-read)
+    # Pin priority authors strongly (but not automatic "must read")
     if has_priority_author(paper):
         score += 25
 
-    # High-value keyword matches
-    for kw in HIGH_VALUE_KEYWORDS:
-        k = kw.lower()
-        if k in title:
+    hv = [k.lower() for k in HIGH_VALUE_KEYWORDS]
+    hv_set = set(hv)
+
+    for kw in hv:
+        if kw in title:
             score += 15
-        elif k in abstract:
+        elif kw in abstract:
             score += 10
 
-    # Regular keyword matches (skip ones already in high-value)
-    for kw in TOPIC_KEYWORDS:
-        k = kw.lower()
-        if k in HIGH_VALUE_LOWER:
+    for kw in (k.lower() for k in TOPIC_KEYWORDS):
+        if kw in hv_set:
             continue
-        if k in title:
+        if kw in title:
             score += 5
-        elif k in abstract:
+        elif kw in abstract:
             score += 3
 
     return score
 
 
-def get_relevance_tier(score: int) -> tuple[str, str, str, str]:
+def get_relevance_tier(score: int) -> tuple:
     if score >= 20:
         return ("🔴", "#c5050c", "MUST READ", "#fff0f0")
-    elif score >= 10:
+    if score >= 10:
         return ("🟠", "#e67e00", "RELEVANT", "#fff8f0")
-    elif score >= 2:
+    if score >= 2:
         return ("🟡", "#d4a017", "SOMEWHAT RELEVANT", "#fffef0")
-    else:
-        return ("⚪", "#888888", "GENERAL", "#f9f9f9")
+    return ("⚪", "#888888", "GENERAL", "#f9f9f9")
 
 
 def sort_papers(papers: list[dict]) -> list[dict]:
     """
-    Priority-first sorting:
-      1) priority ORCID present (True first)
-      2) relevance score (high first)
-      3) pubdate (newest first)
+    Priority-first, then score, then recency.
+    (This is what you actually want for "priority sorting".)
     """
-    scored = []
-    for p in papers:
-        pri = has_priority_author(p)
-        sc = calculate_relevance_score(p)
-        dt = _parse_pubdate(p)
-        scored.append((p, pri, sc, dt))
-
-    scored.sort(key=lambda x: (x[1], x[2], x[3]), reverse=True)
-    return [p for (p, _, _, _) in scored]
+    return sorted(
+        papers,
+        key=lambda p: (has_priority_author(p), calculate_relevance_score(p), _parse_pubdate(p)),
+        reverse=True,
+    )
 
 
-def merge_unique_by_bibcode(papers: list[dict]) -> list[dict]:
-    """Deduplicate across multiple ADS queries (topic + ORCID) using bibcode."""
-    by_bib = {}
-    for p in papers:
-        bc = p.get("bibcode")
-        if bc:
-            by_bib[bc] = p
-    return list(by_bib.values())
+# -----------------------
+# Formatting helpers
+# -----------------------
+def get_arxiv_id(paper: dict) -> str | None:
+    for ident in paper.get("identifier", []) or []:
+        if ident.startswith("arXiv:"):
+            return ident.replace("arXiv:", "")
+    return None
 
 
-# -------------------------
-# Email formatting
-# -------------------------
+def get_arxiv_url(paper: dict) -> str:
+    arxiv_id = get_arxiv_id(paper)
+    if arxiv_id:
+        return f"https://arxiv.org/abs/{arxiv_id}"
+    bibcode = paper.get("bibcode", "")
+    return f"https://ui.adsabs.harvard.edu/abs/{bibcode}"
+
+
+def get_arxiv_category(paper: dict) -> str:
+    classes = paper.get("arxiv_class", []) or []
+    return classes[0] if classes else "astro-ph"
+
+
 def format_paper_html(paper: dict) -> str:
-    title = (paper.get("title", ["Untitled"]) or ["Untitled"])[0]
+    title = paper.get("title", ["Untitled"])[0]
     authors = paper.get("author", []) or []
     abstract = paper.get("abstract", "No abstract available.") or "No abstract available."
     url = get_arxiv_url(paper)
@@ -420,19 +344,12 @@ def format_paper_html(paper: dict) -> str:
     score = calculate_relevance_score(paper)
     emoji, color, label, bg_color = get_relevance_tier(score)
 
-    # Format authors - first 6 only
-    if len(authors) > 6:
-        author_str = ", ".join(authors[:6]) + f" + {len(authors) - 6} more"
-    else:
-        author_str = ", ".join(authors)
+    author_str = ", ".join(authors[:6]) + (f" + {len(authors) - 6} more" if len(authors) > 6 else "")
 
-    # Truncate abstract
-    if len(abstract) > 400:
-        truncated_abstract = abstract[:400].rsplit(" ", 1)[0] + "..."
-    else:
-        truncated_abstract = abstract
+    truncated_abstract = abstract
+    if len(truncated_abstract) > 400:
+        truncated_abstract = truncated_abstract[:400].rsplit(" ", 1)[0] + "..."
 
-    # Priority author badge
     priority_badge = ""
     if priority_authors:
         priority_badge = f"""
@@ -465,7 +382,7 @@ def format_paper_html(paper: dict) -> str:
 
 
 def format_paper_text(paper: dict) -> str:
-    title = (paper.get("title", ["Untitled"]) or ["Untitled"])[0]
+    title = paper.get("title", ["Untitled"])[0]
     authors = paper.get("author", []) or []
     abstract = paper.get("abstract", "No abstract available.") or "No abstract available."
     url = get_arxiv_url(paper)
@@ -475,15 +392,8 @@ def format_paper_text(paper: dict) -> str:
     score = calculate_relevance_score(paper)
     emoji, _, label, _ = get_relevance_tier(score)
 
-    # Format authors
-    if len(authors) > 15:
-        author_str = ", ".join(authors[:15]) + f" et al. ({len(authors)} authors)"
-    else:
-        author_str = ", ".join(authors)
-
-    priority_line = ""
-    if priority_authors:
-        priority_line = f"⭐ PRIORITY AUTHOR: {', '.join(priority_authors)}\n"
+    author_str = ", ".join(authors[:15]) + (f" et al. ({len(authors)} authors)" if len(authors) > 15 else "")
+    priority_line = f"⭐ PRIORITY AUTHOR: {', '.join(priority_authors)}\n" if priority_authors else ""
 
     return f"""
 {emoji} [{label}]
@@ -498,19 +408,19 @@ Link: {url}
 """
 
 
+# -----------------------
+# Email creation + sending
+# -----------------------
 def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, str]:
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
-    # Sort papers
     sorted_papers = sort_papers(papers)
 
-    # Count by tier
     tier_counts = {"🔴": 0, "🟠": 0, "🟡": 0, "⚪": 0}
-    for paper in papers:
-        score = calculate_relevance_score(paper)
-        emoji, _, _, _ = get_relevance_tier(score)
+    for p in papers:
+        emoji, _, _, _ = get_relevance_tier(calculate_relevance_score(p))
         tier_counts[emoji] += 1
 
     welcome = random.choice(WELCOME_MESSAGES)
@@ -519,18 +429,14 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
     if not papers:
         subject = "Astro-ph Topic Digest: No papers today"
         html = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <h1 style="color: #0479a8; border-bottom: 2px solid #0479a8; padding-bottom: 10px;">
-                Daily Astro-ph Topic Digest
-            </h1>
+        <html><body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <h1 style="color: #0479a8; border-bottom: 2px solid #0479a8; padding-bottom: 10px;">Daily Astro-ph Topic Digest</h1>
             <div style="background-color: #f0f8ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-size: 16px;">
                 {welcome}
             </div>
             <p style="color: #666;">Papers from {date_range}</p>
             <p>No papers matching your interests were found today. Rest day for your brain! 🧘</p>
-        </body>
-        </html>
+        </body></html>
         """
         text = f"Daily Astro-ph Topic Digest\n{date_range}\n\n{welcome}\n\nNo papers found today."
         return subject, html, text
@@ -563,7 +469,7 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
 
         {html_papers}
 
-        <div style="margin-top: 50px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; color: white; text-align: center;">
+        <div style="margin-top: 50px; padding: 20px; background: #5b5fc7; border-radius: 15px; color: white; text-align: center;">
             <h2 style="margin: 0 0 10px 0;">{treasure_title}</h2>
             <p style="margin: 0; font-size: 14px; line-height: 1.6;">
                 {treasure_content}
@@ -598,7 +504,6 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
 {'=' * 60}
 {treasure_content}
 """
-
     return subject, html, text
 
 
@@ -626,9 +531,9 @@ def send_email(subject: str, html_content: str, text_content: str):
     print(f"Email sent successfully to {recipient_email}")
 
 
-# -------------------------
+# -----------------------
 # Main
-# -------------------------
+# -----------------------
 def main():
     api_key = os.environ.get("ADS_API_KEY")
     if not api_key:
@@ -638,24 +543,15 @@ def main():
 
     print(f"Querying ADS for topic-relevant papers from the last {days_back} days...")
     print(f"Priority ORCIDs: {PRIORITY_ORCIDS}")
+    print(f"Batch size: {KEYWORDS_PER_QUERY} keywords/query")
 
-    # 1) Topic papers
-    topic_papers = query_topic_papers(api_key, days_back=days_back, rows=500)
-    print(f"Found {len(topic_papers)} topic papers")
+    papers = query_topic_papers(api_key, days_back=days_back, rows=500)
+    print(f"Found {len(papers)} unique papers (merged across batches)")
 
-    # 2) Priority-author papers (via ADS ORCID index) – merged in
-    priority_papers = query_priority_papers(api_key, days_back=days_back, rows_each=200)
-    print(f"Found {len(priority_papers)} priority-ORCID papers (before dedupe)")
-
-    # Merge + dedupe
-    papers = merge_unique_by_bibcode(topic_papers + priority_papers)
-    print(f"{len(papers)} total after merging/deduping")
-
-    # Tier counts
+    # Count by tier
     tier_counts = {"🔴": 0, "🟠": 0, "🟡": 0, "⚪": 0}
-    for paper in papers:
-        score = calculate_relevance_score(paper)
-        emoji, _, _, _ = get_relevance_tier(score)
+    for p in papers:
+        emoji, _, _, _ = get_relevance_tier(calculate_relevance_score(p))
         tier_counts[emoji] += 1
 
     print(f"  🔴 {tier_counts['🔴']} must-read")
