@@ -21,12 +21,18 @@ ADS_API_URL = "https://api.adsabs.harvard.edu/v1/search/query"
 
 # Priority ORCIDs - papers by these authors appear at the top
 PRIORITY_ORCIDS = [
+    "0009-0007-0488-5685", # Ritvik Sai Narayan
     "0000-0001-7493-7419",  # Melinda Soares-Furtado
-    "0009-0001-1360-8547", #Julia Sheffler
+    "0009-0001-1360-8547", # Julia Sheffler
 ]
 
 # Topic keywords to search for (also used for relevance scoring)
 TOPIC_KEYWORDS = [
+    "open cluster",
+    "MESA",
+    "NGC 188",
+    "orbital architecture",
+    "m dwarf",
     "gyrochronology",
     "stellar rotation",
     "exoplanet age",
@@ -43,7 +49,6 @@ TOPIC_KEYWORDS = [
     "Ursa Major",
     "Hyades",
     "Upper Sco",
-    "gyrochronology",
     "gyrochronological",
     "age estimate",
     "age constraint",
@@ -57,10 +62,44 @@ TOPIC_KEYWORDS = [
     "transiting planet",
     "transiting exoplanet",
     "high-precision radial velocity",
+    "asteroseismology",
+
+    # Roman + exoplanets (no microlensing)
+    "Nancy Grace Roman Space Telescope",
+    "Roman Space Telescope",
+    "Roman wide field instrument",
+    "Roman photometry",
+    "debris disk",
+    "transit survey",
+    "transit search",
+    "transit injection-recovery",
+    "completeness",
+    "planet validation",
+    "joint transit RV fit",
+    "radial velocity follow-up",
+    "RV mass",
+    "mass-radius relation",
+    "occurrence rate",
+    "planet demographics",
+    "multi-planet system",
+    "TTV",
+    "Rossiter-McLaughlin",
+    "spin-orbit",
+    "obliquity",
+    "transmission spectroscopy",
+    "emission spectroscopy",
+    "atmospheric retrieval",
+    "clouds and hazes",
+    "metallicity",
+    "escape",
+    "photoevaporation",
+    "core-powered mass loss",
 ]
 
-# High-value keywords (extra relevance points)
 HIGH_VALUE_KEYWORDS = [
+    "hydrodynamic simulation",
+    "exoplanet discovery",
+    "common envelope",
     "gyrochronology",
     "planetary engulfment",
     "planet engulfment",
@@ -70,6 +109,15 @@ HIGH_VALUE_KEYWORDS = [
     "stellar age",
     "young planet",
     "stellar pollution",
+
+    # Roman CGI / direct imaging + rigorous inference
+    "exoplanet yield",
+    "survey optimization",
+    "hierarchical Bayesian",
+    "completeness correction",
+    "selection function",
+    "occurrence rate inference",
+    "injection-recovery",
 ]
 
 
