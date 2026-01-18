@@ -29,6 +29,7 @@ PRIORITY_ORCIDS = [
     "0000-0001-7493-7419",  # Melinda Soares-Furtado
     "0009-0001-1360-8547",  # Julia Sheffler
     "0000-0001-7246-5438",  # Andrew Vanderburg
+    "0009-0006-4294-6760",  # Adam Distler
 ]
 
 # Map priority ORCIDs to expected author names (fallback if ORCID not claimed)
@@ -37,6 +38,7 @@ PRIORITY_AUTHOR_NAMES = {
     "0000-0001-7493-7419": ["soares-furtado, melinda"],
     "0009-0001-1360-8547": ["sheffler, julia"],
     "0000-0001-7246-5438": ["vanderburg, andrew"],
+    "0009-0006-4294-6760": ["distler, adam"],
 }
 
 
