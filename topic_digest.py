@@ -31,6 +31,15 @@ PRIORITY_ORCIDS = [
     "0000-0001-7246-5438",  # Andrew Vanderburg
 ]
 
+# Map priority ORCIDs to expected author names (fallback if ORCID not claimed)
+PRIORITY_AUTHOR_NAMES = {
+    "0009-0007-0488-5685": ["narayan, ritvik", "narayan, ritvik sai"],
+    "0000-0001-7493-7419": ["soares-furtado, melinda"],
+    "0009-0001-1360-8547": ["sheffler, julia"],
+    "0000-0001-7246-5438": ["vanderburg, andrew"],
+}
+
+
 # Topic keywords to search for (also used for relevance scoring)
 TOPIC_KEYWORDS = [
     "open cluster",
@@ -233,6 +242,11 @@ def query_topic_papers(api_key: str, days_back: int = 1, rows: int = 500) -> lis
 # -----------------------
 # ORCID + relevance
 # -----------------------
+
+def normalize_name(name: str) -> str:
+    """Normalize author name for matching (Last, First M. -> last first)"""
+    return name.lower().replace(",", "").replace(".", "").strip()
+    
 def get_paper_orcids(paper: dict) -> set:
     orcids = set()
     for field in ("orcid_pub", "orcid_user", "orcid_other"):
@@ -243,18 +257,43 @@ def get_paper_orcids(paper: dict) -> set:
 
 
 def has_priority_author(paper: dict) -> bool:
-    return bool(get_paper_orcids(paper).intersection(PRIORITY_ORCIDS))
+    # First try ORCID matching
+    if get_paper_orcids(paper).intersection(PRIORITY_ORCIDS):
+        return True
+    
+    # Fallback to name matching
+    authors = paper.get("author", []) or []
+    normalized_authors = [normalize_name(a) for a in authors]
+    
+    for orcid, names in PRIORITY_AUTHOR_NAMES.items():
+        for name in names:
+            if normalize_name(name) in normalized_authors:
+                return True
+    
+    return False
 
 
 def get_priority_authors(paper: dict) -> list:
-    authors = paper.get("author", []) or []
     priority_authors = []
+    authors = paper.get("author", []) or []
+    
+    # Get ORCID-matched authors
     for field in ("orcid_pub", "orcid_user", "orcid_other"):
         orcids = paper.get(field, []) or []
         for i, oid in enumerate(orcids):
             if oid in PRIORITY_ORCIDS and i < len(authors):
                 if authors[i] not in priority_authors:
                     priority_authors.append(authors[i])
+    
+    # Get name-matched authors (fallback)
+    normalized_authors = [normalize_name(a) for a in authors]
+    for i, norm_name in enumerate(normalized_authors):
+        for orcid, names in PRIORITY_AUTHOR_NAMES.items():
+            for name in names:
+                if normalize_name(name) == norm_name:
+                    if authors[i] not in priority_authors:
+                        priority_authors.append(authors[i])
+    
     return priority_authors
 
 
