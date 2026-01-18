@@ -196,18 +196,17 @@ def build_query(days_back: int, keywords_subset: list[str]) -> str:
 
 
 def query_ads(api_key: str, q: str, rows: int = 200) -> list[dict]:
-    """POST to ADS search API (avoids URL-length limits)."""
+    """GET from ADS search API."""
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
     }
-    payload = {
+    params = {
         "q": q,
         "fl": "title,author,aff,abstract,bibcode,identifier,keyword,pubdate,arxiv_class,orcid_pub,orcid_user,orcid_other",
         "rows": rows,
         "sort": "date desc",
     }
-    r = requests.post(ADS_API_URL, headers=headers, json=payload, timeout=60)
+    r = requests.get(ADS_API_URL, headers=headers, params=params, timeout=60)
     r.raise_for_status()
     return r.json().get("response", {}).get("docs", [])
 
