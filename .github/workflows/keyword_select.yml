@@ -1,0 +1,62 @@
+name: Keyword Selection
+
+# Fired when you open the "Select keywords to add" issue from a digest email,
+# or whenever you tick more boxes on it (edited).
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write   # push keywords.json
+  issues: write     # comment on the issue
+
+jobs:
+  apply-keywords:
+    # Only run on the digest's keyword-selection issues.
+    if: startsWith(github.event.issue.title, 'Keyword selection:')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply ticked keywords
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python apply_selected_keywords.py
+
+      - name: Commit updated keywords
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- keywords.json; then
+            echo "No new keywords to commit."
+          else
+            git add keywords.json
+            git commit -m "Add email-selected keywords (issue #${{ github.event.issue.number }})"
+            git push
+          fi
+
+      - name: Comment with what was added
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let added = '';
+            try { added = fs.readFileSync('added_keywords.txt', 'utf8').trim(); } catch (e) {}
+            const body = added
+              ? `✅ Added ${added.split('\n').length} keyword(s) to \`keywords.json\`:\n` +
+                added.split('\n').map(k => `- ${k}`).join('\n') +
+                `\n\nTick more boxes above to add others, or close this issue when done.`
+              : `No new keywords ticked yet. Tick the boxes above and I'll add them.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
