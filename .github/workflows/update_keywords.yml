@@ -1,0 +1,50 @@
+name: Update Keywords
+
+on:
+  schedule:
+    - cron: '0 12 1 * *'  # 12:00 UTC on the 1st of each month
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print proposed keywords without committing (1 = yes)'
+        required: false
+        default: '0'
+
+jobs:
+  update-keywords:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # allow the default GITHUB_TOKEN to push keywords.json
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Mine keywords from your papers
+        env:
+          ADS_API_KEY: ${{ secrets.ADS_API_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+        run: python update_keywords.py
+
+      - name: Commit updated keywords
+        if: ${{ github.event.inputs.dry_run != '1' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- keywords.json; then
+            echo "No keyword changes to commit."
+          else
+            git add keywords.json
+            git commit -m "Auto-update keywords ($(date -u +%Y-%m-%d))"
+            git push
+          fi
