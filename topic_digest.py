@@ -8,14 +8,23 @@ Priority ORCID authors are pinned to the top of the digest.
 """
 
 import os
+import re
 import ssl
+import time
+import json
 import random
 import smtplib
+from pathlib import Path
+from collections import Counter
+from urllib.parse import urlencode
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
 import requests
+
+from keyword_utils import paper_text, document_freq, ads_keyword_freq
 
 
 # -----------------------
@@ -44,8 +53,9 @@ PRIORITY_AUTHOR_NAMES = {
 }
 
 
-# Topic keywords to search for (also used for relevance scoring)
-TOPIC_KEYWORDS = [
+# Topic keywords to search for (also used for relevance scoring).
+# These are the embedded fallback used only if keywords.json is missing/unreadable.
+DEFAULT_TOPIC_KEYWORDS = [
     "open cluster",
     "MESA",
     "NGC 188",
@@ -112,7 +122,7 @@ TOPIC_KEYWORDS = [
     "core-powered mass loss",
 ]
 
-HIGH_VALUE_KEYWORDS = [
+DEFAULT_HIGH_VALUE_KEYWORDS = [
     "hydrodynamic simulation",
     "exoplanet discovery",
     "common envelope",
@@ -127,6 +137,36 @@ HIGH_VALUE_KEYWORDS = [
     "stellar pollution",
     "exoplanet yield",
 ]
+
+# ---------------------------------------------------------------------------
+# Keyword loading: curated "seed_*" lists (kept forever) + "auto_keywords"
+# appended monthly by update_keywords.py. See keywords.json.
+# ---------------------------------------------------------------------------
+KEYWORDS_FILE = Path(__file__).with_name("keywords.json")
+
+
+def load_keywords() -> tuple[list, list]:
+    """Return (topic_keywords, high_value_keywords) from keywords.json.
+
+    Falls back to the embedded DEFAULT_* lists if the file is missing or
+    unreadable. Auto-mined buzzwords are merged into the topic-tier list.
+    """
+    try:
+        data = json.loads(KEYWORDS_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        data = {}
+
+    seed_topic = data.get("seed_topic_keywords") or DEFAULT_TOPIC_KEYWORDS
+    auto = data.get("auto_keywords") or []
+    selected = data.get("selected_keywords") or []
+    high = data.get("seed_high_value_keywords") or DEFAULT_HIGH_VALUE_KEYWORDS
+
+    # Merge seeds + auto-mined + email-selected, de-duplicated, order preserved.
+    topic = list(dict.fromkeys([*seed_topic, *auto, *selected]))
+    return topic, high
+
+
+TOPIC_KEYWORDS, HIGH_VALUE_KEYWORDS = load_keywords()
 
 # How many keywords per ADS query (keeps q length safely small)
 KEYWORDS_PER_QUERY = int(os.environ.get("KEYWORDS_PER_QUERY", "12"))
@@ -451,14 +491,216 @@ Link: {url}
 
 
 # -----------------------
+# PDF attachments (top-N by relevance)
+# -----------------------
+PDF_TOP_N = int(os.environ.get("PDF_TOP_N", "5"))
+PDF_MAX_MB = float(os.environ.get("PDF_MAX_MB", "8"))          # per-file cap
+PDF_TOTAL_MAX_MB = float(os.environ.get("PDF_TOTAL_MAX_MB", "20"))  # total cap (Gmail allows ~25)
+PDF_USER_AGENT = "arxiv-digest/1.0 (https://github.com/ritviksainarayan/arxiv-digest)"
+
+
+def _pdf_filename(paper: dict) -> str:
+    """A safe, descriptive filename for an attached PDF."""
+    ident = get_arxiv_id(paper) or paper.get("bibcode", "paper")
+    ident = re.sub(r"[^A-Za-z0-9._-]", "_", ident)
+    title = (paper.get("title", ["paper"])[0] or "paper")
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", title).strip("_")[:60]
+    return f"{ident}_{slug}.pdf" if slug else f"{ident}.pdf"
+
+
+def fetch_pdf(paper: dict) -> bytes | None:
+    """Download a paper's PDF from arXiv. Returns bytes or None on any failure."""
+    arxiv_id = get_arxiv_id(paper)
+    if not arxiv_id:
+        return None
+    url = f"https://arxiv.org/pdf/{arxiv_id}"
+    try:
+        r = requests.get(url, headers={"User-Agent": PDF_USER_AGENT}, timeout=90)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  PDF fetch failed for {arxiv_id}: {e}")
+        return None
+
+    content = r.content
+    if not content.startswith(b"%PDF-"):
+        print(f"  Skipping {arxiv_id}: response was not a PDF ({len(content)} bytes)")
+        return None
+    if len(content) > PDF_MAX_MB * 1024 * 1024:
+        print(f"  Skipping {arxiv_id}: {len(content) / 1e6:.1f} MB exceeds {PDF_MAX_MB} MB cap")
+        return None
+    return content
+
+
+def collect_top_pdfs(sorted_papers: list, top_n: int = PDF_TOP_N) -> list:
+    """Fetch up to top_n PDFs, respecting per-file and total size caps.
+
+    Returns a list of (filename, bytes) tuples.
+    """
+    attachments = []
+    total = 0
+    for paper in sorted_papers[:top_n]:
+        data = fetch_pdf(paper)
+        if not data:
+            continue
+        if total + len(data) > PDF_TOTAL_MAX_MB * 1024 * 1024:
+            print(f"  Total PDF size cap ({PDF_TOTAL_MAX_MB} MB) reached; stopping.")
+            break
+        attachments.append((_pdf_filename(paper), data))
+        total += len(data)
+        print(f"  Attached {attachments[-1][0]} ({len(data) / 1e6:.1f} MB)")
+        time.sleep(1)  # be polite to arXiv
+    return attachments
+
+
+# -----------------------
+# Suggested keywords (harvested from the day's papers)
+# -----------------------
+GH_REPO = os.environ.get("GH_REPO", "ritviksainarayan/arxiv-digest")
+SUGGEST_TOP_N = int(os.environ.get("SUGGEST_TOP_N", "15"))
+
+
+def _norm_key(phrase: str) -> str:
+    """Normalize a phrase for dup-matching: lowercase + de-pluralize last word.
+
+    So "open clusters" matches existing "open cluster", "m dwarfs" matches
+    "m dwarf", etc.
+    """
+    words = phrase.lower().split()
+    if words and words[-1].endswith("s") and len(words[-1]) > 3:
+        words[-1] = words[-1][:-1]
+    return " ".join(words)
+
+
+def harvest_candidate_keywords(papers: list, existing_lower: set, top_n: int = SUGGEST_TOP_N) -> list:
+    """Mine candidate keywords from today's papers that are NOT already tracked.
+
+    Returns a list of (phrase, n_papers) tuples, best first. Favors curated
+    ADS keywords and multi-word phrases over one-off single words. Excludes
+    anything already tracked, including singular/plural variants.
+    """
+    texts = [paper_text(p) for p in papers]
+    df = document_freq(texts)            # phrase -> # papers containing it
+    ads = ads_keyword_freq(papers)       # author-curated ADS keywords
+
+    existing_norm = {_norm_key(e) for e in existing_lower}
+
+    scored = []
+    for phrase in set(df) | set(ads):
+        if phrase.lower() in existing_lower or _norm_key(phrase) in existing_norm:
+            continue
+        count = df.get(phrase, ads.get(phrase, 0))
+        is_phrase = " " in phrase
+        in_ads = phrase in ads
+        # Keep author-curated ADS keywords (any), and free-text multi-word
+        # phrases only if they recur across >= 2 papers. This drops one-off
+        # n-grams pulled from a single abstract and bare generic single words.
+        if not (in_ads or (is_phrase and count >= 2)):
+            continue
+        weight = count + (2 if in_ads else 0) + (0.4 * phrase.count(" "))
+        scored.append((weight, count, phrase))
+
+    scored.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+
+    # Light de-dup: drop a phrase fully contained within an already-accepted one.
+    accepted, out = [], []
+    for _, count, phrase in scored:
+        if any(phrase != a and phrase in a for a in accepted):
+            continue
+        accepted.append(phrase)
+        out.append((phrase, count))
+        if len(out) >= top_n:
+            break
+    return out
+
+
+def build_keyword_issue_url(candidates: list, date_str: str) -> str:
+    """A GitHub 'new issue' URL pre-filled with a checklist of candidates.
+
+    Checking boxes on the resulting issue triggers the Keyword Selection
+    workflow, which appends the ticked keywords to keywords.json.
+    """
+    title = f"Keyword selection: {date_str}"
+    body_lines = [
+        "Tick the keywords you want to add to your digest, then the",
+        "**Keyword Selection** workflow will add them automatically.",
+        "",
+    ]
+    body_lines += [f"- [ ] {kw}" for kw, _ in candidates]
+    body_lines += [
+        "",
+        "<!-- keyword-selection: do not change the title -->",
+    ]
+    query = urlencode({
+        "title": title,
+        "body": "\n".join(body_lines),
+        "labels": "keyword-selection",
+    })
+    return f"https://github.com/{GH_REPO}/issues/new?{query}"
+
+
+def format_suggestions_html(candidates: list, date_str: str) -> str:
+    if not candidates:
+        return ""
+    url = build_keyword_issue_url(candidates, date_str)
+    chips = "".join(
+        f'<span style="display:inline-block; background:#eef4fb; color:#0479a8; '
+        f'border:1px solid #cfe2f3; border-radius:12px; padding:3px 10px; '
+        f'margin:3px 4px 3px 0; font-size:13px;">{kw} '
+        f'<span style="color:#999;">×{count}</span></span>'
+        for kw, count in candidates
+    )
+    return f"""
+    <div style="margin-top: 40px; padding: 18px; background:#fafcff; border:1px dashed #cfe2f3; border-radius:12px;">
+        <h2 style="margin:0 0 6px 0; color:#0479a8; font-size:18px;">🔎 New keywords from today's papers</h2>
+        <p style="margin:0 0 12px 0; color:#666; font-size:14px;">
+            Terms appearing today that aren't in your list yet. Pick the ones worth tracking:
+        </p>
+        <div style="margin-bottom:14px;">{chips}</div>
+        <a href="{url}"
+           style="display:inline-block; background:#0479a8; color:white; text-decoration:none;
+                  padding:10px 18px; border-radius:8px; font-size:14px; font-weight:bold;">
+            ✅ Select keywords to add →
+        </a>
+        <p style="margin:12px 0 0 0; color:#999; font-size:12px;">
+            Opens a pre-filled GitHub issue. Tick the boxes you want and the rest is automatic.
+        </p>
+    </div>
+    """
+
+
+def format_suggestions_text(candidates: list, date_str: str) -> str:
+    if not candidates:
+        return ""
+    url = build_keyword_issue_url(candidates, date_str)
+    lines = ["", "=" * 60, "NEW KEYWORDS FROM TODAY'S PAPERS (not in your list yet):", "=" * 60]
+    lines += [f"  - {kw}  (x{count})" for kw, count in candidates]
+    lines += ["", f"Select which to add: {url}", ""]
+    return "\n".join(lines)
+
+
+# -----------------------
 # Email creation + sending
 # -----------------------
-def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, str]:
+def create_email_content(papers: list[dict], days_back: int, attach_count: int = 0,
+                         candidates: list | None = None) -> tuple[str, str, str]:
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days_back)
     date_range = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
 
+    suggest_html = format_suggestions_html(candidates or [], end_date.strftime("%Y-%m-%d"))
+    suggest_text = format_suggestions_text(candidates or [], end_date.strftime("%Y-%m-%d"))
+
     sorted_papers = sort_papers(papers)
+
+    attach_note_html = (
+        f'<p style="margin: 8px 0 0 0; font-size: 14px; color: #0479a8;">'
+        f'📎 Top {attach_count} paper{"s" if attach_count != 1 else ""} attached as PDF.</p>'
+        if attach_count else ""
+    )
+    attach_note_text = (
+        f"\n📎 Top {attach_count} paper{'s' if attach_count != 1 else ''} attached as PDF.\n"
+        if attach_count else ""
+    )
 
     tier_counts = {"🔴": 0, "🟠": 0, "🟡": 0, "⚪": 0}
     for p in papers:
@@ -507,9 +749,12 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
                 <span style="margin-left: 10px;">🟡 {tier_counts['🟡']} interesting</span>
                 <span style="margin-left: 10px;">⚪ {tier_counts['⚪']} general</span>
             </p>
+            {attach_note_html}
         </div>
 
         {html_papers}
+
+        {suggest_html}
 
         <div style="margin-top: 50px; padding: 20px; background: #5b5fc7; border-radius: 15px; color: white; text-align: center;">
             <h2 style="margin: 0 0 10px 0;">{treasure_title}</h2>
@@ -537,10 +782,10 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
   🟠 {tier_counts['🟠']} relevant
   🟡 {tier_counts['🟡']} interesting
   ⚪ {tier_counts['⚪']} general
-
+{attach_note_text}
 {'=' * 60}
 {text_papers}
-
+{suggest_text}
 {'=' * 60}
 {treasure_title}
 {'=' * 60}
@@ -549,20 +794,28 @@ def create_email_content(papers: list[dict], days_back: int) -> tuple[str, str, 
     return subject, html, text
 
 
-def send_email(subject: str, html_content: str, text_content: str):
+def send_email(subject: str, html_content: str, text_content: str, attachments: list | None = None):
     smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     sender_email = os.environ["SENDER_EMAIL"]
     sender_password = os.environ["SENDER_PASSWORD"]
     recipient_email = os.environ["RECIPIENT_EMAIL"]
 
-    message = MIMEMultipart("alternative")
+    # "mixed" root so we can carry both the text/html body and PDF attachments.
+    message = MIMEMultipart("mixed")
     message["Subject"] = subject
     message["From"] = sender_email
     message["To"] = recipient_email
 
-    message.attach(MIMEText(text_content, "plain"))
-    message.attach(MIMEText(html_content, "html"))
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(text_content, "plain"))
+    body.attach(MIMEText(html_content, "html"))
+    message.attach(body)
+
+    for filename, data in (attachments or []):
+        part = MIMEApplication(data, _subtype="pdf")
+        part.add_header("Content-Disposition", "attachment", filename=filename)
+        message.attach(part)
 
     context = ssl.create_default_context()
     with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -570,7 +823,8 @@ def send_email(subject: str, html_content: str, text_content: str):
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, recipient_email, message.as_string())
 
-    print(f"Email sent successfully to {recipient_email}")
+    n = len(attachments or [])
+    print(f"Email sent successfully to {recipient_email}" + (f" with {n} PDF attachment(s)" if n else ""))
 
 
 # -----------------------
@@ -601,10 +855,26 @@ def main():
     print(f"  🟡 {tier_counts['🟡']} interesting")
     print(f"  ⚪ {tier_counts['⚪']} general")
 
-    subject, html, text = create_email_content(papers, days_back)
+    # Fetch the top-N papers (by the same ranking used in the email) as PDFs.
+    attachments = []
+    if papers and os.environ.get("SENDER_EMAIL") and PDF_TOP_N > 0:
+        print(f"\nFetching top {PDF_TOP_N} PDFs from arXiv...")
+        attachments = collect_top_pdfs(sort_papers(papers), PDF_TOP_N)
+
+    # Harvest candidate keywords from today's papers (excluding ones already tracked).
+    existing_lower = {k.lower() for k in (TOPIC_KEYWORDS + HIGH_VALUE_KEYWORDS)}
+    candidates = harvest_candidate_keywords(papers, existing_lower) if papers else []
+    if candidates:
+        print(f"\nSuggesting {len(candidates)} new candidate keyword(s) from today's papers:")
+        for kw, c in candidates:
+            print(f"  ? {kw} (x{c})")
+
+    subject, html, text = create_email_content(
+        papers, days_back, attach_count=len(attachments), candidates=candidates
+    )
 
     if os.environ.get("SENDER_EMAIL"):
-        send_email(subject, html, text)
+        send_email(subject, html, text, attachments=attachments)
     else:
         print("\nEmail credentials not configured. Email content:")
         print(text)
