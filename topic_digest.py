@@ -500,12 +500,15 @@ PDF_USER_AGENT = "arxiv-digest/1.0 (https://github.com/ritviksainarayan/arxiv-di
 
 
 def _pdf_filename(paper: dict) -> str:
-    """A safe, descriptive filename for an attached PDF."""
-    ident = get_arxiv_id(paper) or paper.get("bibcode", "paper")
-    ident = re.sub(r"[^A-Za-z0-9._-]", "_", ident)
-    title = (paper.get("title", ["paper"])[0] or "paper")
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", title).strip("_")[:60]
-    return f"{ident}_{slug}.pdf" if slug else f"{ident}.pdf"
+    """The paper's title as the PDF filename (sanitized for the filesystem)."""
+    title = (paper.get("title", ["paper"])[0] or "paper").strip()
+    # Replace characters that are illegal/awkward in filenames, collapse spaces.
+    name = re.sub(r'[\\/:*?"<>|]+', " ", title)
+    name = re.sub(r"\s+", " ", name).strip()
+    name = name[:180].rstrip(". ")  # keep well under filesystem name limits
+    if not name:
+        name = get_arxiv_id(paper) or paper.get("bibcode", "paper")
+    return f"{name}.pdf"
 
 
 def fetch_pdf(paper: dict) -> bytes | None:
