@@ -24,7 +24,14 @@ from email.mime.application import MIMEApplication
 
 import requests
 
-from keyword_utils import paper_text, document_freq, ads_keyword_freq
+from keyword_utils import (
+    paper_text,
+    document_freq,
+    ads_keyword_freq,
+    yake_keywords,
+    count_in_texts,
+    is_arxiv_category,
+)
 
 
 # -----------------------
@@ -556,6 +563,9 @@ def collect_top_pdfs(sorted_papers: list, top_n: int = PDF_TOP_N) -> list:
 # -----------------------
 GH_REPO = os.environ.get("GH_REPO", "ritviksainarayan/arxiv-digest")
 SUGGEST_TOP_N = int(os.environ.get("SUGGEST_TOP_N", "15"))
+# Minimum papers a free-text phrase must appear in to be suggested. ADS-curated
+# keywords bypass this (they're already vetted). Raise to be stricter.
+FREETEXT_MIN_PAPERS = int(os.environ.get("FREETEXT_MIN_PAPERS", "3"))
 
 
 def _norm_key(phrase: str) -> str:
@@ -570,43 +580,70 @@ def _norm_key(phrase: str) -> str:
     return " ".join(words)
 
 
-def harvest_candidate_keywords(papers: list, existing_lower: set, top_n: int = SUGGEST_TOP_N) -> list:
-    """Mine candidate keywords from today's papers that are NOT already tracked.
+def _is_trackable(phrase: str, existing_lower: set, existing_norm: set) -> bool:
+    """True if a phrase is a usable new keyword (not tracked, not a category)."""
+    p = phrase.lower()
+    if p in existing_lower or _norm_key(phrase) in existing_norm:
+        return False
+    if is_arxiv_category(phrase):
+        return False
+    return len(p) >= 3
 
-    Returns a list of (phrase, n_papers) tuples, best first. Favors curated
-    ADS keywords and multi-word phrases over one-off single words. Excludes
-    anything already tracked, including singular/plural variants.
+
+def harvest_candidate_keywords(papers: list, existing_lower: set, top_n: int = SUGGEST_TOP_N) -> list:
+    """Suggest new keyword phrases from today's papers, NOT already tracked.
+
+    Sources, in priority order:
+      1. Author-curated ADS keywords (UAT thesaurus terms — clean and specific).
+      2. YAKE-extracted phrases from the day's titles + abstracts (statistical
+         keyword extraction; far less noisy than raw n-grams).
+      3. Plain n-gram document frequency — only as a fallback if YAKE isn't
+         installed.
+
+    Returns a list of (phrase, n_papers) tuples, best first. Excludes anything
+    already tracked (singular/plural aware) and arXiv category names.
     """
     texts = [paper_text(p) for p in papers]
-    df = document_freq(texts)            # phrase -> # papers containing it
-    ads = ads_keyword_freq(papers)       # author-curated ADS keywords
-
+    texts_lower = [t.lower() for t in texts]
+    ads = ads_keyword_freq(papers)       # already excludes arXiv categories
     existing_norm = {_norm_key(e) for e in existing_lower}
 
-    scored = []
-    for phrase in set(df) | set(ads):
-        if phrase.lower() in existing_lower or _norm_key(phrase) in existing_norm:
-            continue
-        count = df.get(phrase, ads.get(phrase, 0))
-        is_phrase = " " in phrase
-        in_ads = phrase in ads
-        # Keep author-curated ADS keywords (any), and free-text multi-word
-        # phrases only if they recur across >= 2 papers. This drops one-off
-        # n-grams pulled from a single abstract and bare generic single words.
-        if not (in_ads or (is_phrase and count >= 2)):
-            continue
-        weight = count + (2 if in_ads else 0) + (0.4 * phrase.count(" "))
-        scored.append((weight, count, phrase))
+    ordered = []  # candidate phrases, best first, de-duplicated by norm key
+    seen_norm = set()
 
-    scored.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+    def add(phrase):
+        nk = _norm_key(phrase)
+        if nk in seen_norm or not _is_trackable(phrase, existing_lower, existing_norm):
+            return
+        seen_norm.add(nk)
+        ordered.append(phrase)
 
-    # Light de-dup: drop a phrase fully contained within an already-accepted one.
+    # 1. ADS keywords first, most-common across today's papers first.
+    for phrase, _c in ads.most_common():
+        add(phrase)
+
+    # 2. YAKE phrases (or n-gram fallback).
+    yake_phrases = yake_keywords(texts, top_n=top_n * 3)
+    if yake_phrases is None:
+        # Fallback: multi-word n-grams seen in >= FREETEXT_MIN_PAPERS papers.
+        df = document_freq(texts)
+        fallback = sorted(
+            ((c, p) for p, c in df.items() if " " in p and c >= FREETEXT_MIN_PAPERS),
+            reverse=True,
+        )
+        for _c, phrase in fallback:
+            add(phrase)
+    else:
+        for phrase in yake_phrases:
+            add(phrase)
+
+    # Drop a phrase fully contained within an already-accepted longer one.
     accepted, out = [], []
-    for _, count, phrase in scored:
+    for phrase in ordered:
         if any(phrase != a and phrase in a for a in accepted):
             continue
         accepted.append(phrase)
-        out.append((phrase, count))
+        out.append((phrase, count_in_texts(phrase, texts_lower)))
         if len(out) >= top_n:
             break
     return out
@@ -865,7 +902,8 @@ def main():
         print(f"\nFetching top {PDF_TOP_N} PDFs from arXiv...")
         attachments = collect_top_pdfs(sort_papers(papers), PDF_TOP_N)
 
-    # Harvest candidate keywords from today's papers (excluding ones already tracked).
+    # Suggest new keywords from today's papers (excluding ones already tracked).
+    # Try the LLM first; fall back to ADS-keyword harvesting if it's unavailable.
     existing_lower = {k.lower() for k in (TOPIC_KEYWORDS + HIGH_VALUE_KEYWORDS)}
     candidates = harvest_candidate_keywords(papers, existing_lower) if papers else []
     if candidates:
