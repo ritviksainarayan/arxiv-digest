@@ -428,10 +428,6 @@ def format_paper_html(paper: dict) -> str:
 
     author_str = ", ".join(authors[:6]) + (f" + {len(authors) - 6} more" if len(authors) > 6 else "")
 
-    truncated_abstract = abstract
-    if len(truncated_abstract) > 400:
-        truncated_abstract = truncated_abstract[:400].rsplit(" ", 1)[0] + "..."
-
     priority_badge = ""
     if priority_authors:
         priority_badge = f"""
@@ -457,7 +453,7 @@ def format_paper_html(paper: dict) -> str:
             {author_str}
         </p>
         <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #444;">
-            {truncated_abstract} <a href="{url}" style="color: #0479a8; text-decoration: none;">[read more]</a>
+            {abstract} <a href="{url}" style="color: #0479a8; text-decoration: none;">[read more]</a>
         </p>
     </div>
     """
@@ -633,10 +629,12 @@ def build_keyword_issue_url(candidates: list, date_str: str) -> str:
         "",
         "<!-- keyword-selection: do not change the title -->",
     ]
+    # NOTE: no `labels=` param — GitHub 404s a prefilled new-issue link if the
+    # label doesn't already exist in the repo. The workflow matches on the issue
+    # title prefix instead, so a label is not needed.
     query = urlencode({
         "title": title,
         "body": "\n".join(body_lines),
-        "labels": "keyword-selection",
     })
     return f"https://github.com/{GH_REPO}/issues/new?{query}"
 
@@ -817,7 +815,10 @@ def send_email(subject: str, html_content: str, text_content: str, attachments: 
 
     for filename, data in (attachments or []):
         part = MIMEApplication(data, _subtype="pdf")
-        part.add_header("Content-Disposition", "attachment", filename=filename)
+        # RFC 2231 tuple form (charset, lang, value) so non-ASCII titles in the
+        # filename are encoded as pure-ASCII `filename*=utf-8''...`. Passing a raw
+        # non-ASCII str here corrupts the message and makes Gmail drop body parts.
+        part.add_header("Content-Disposition", "attachment", filename=("utf-8", "", filename))
         message.attach(part)
 
     context = ssl.create_default_context()
