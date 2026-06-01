@@ -1,6 +1,6 @@
 {
   "_comment": "Curated 'seed_*' lists are maintained by hand and never removed. 'auto_keywords' is appended monthly by update_keywords.py from your (and close collaborators') ADS papers. Edit the seed lists freely; leave auto_keywords to the workflow.",
-  "auto_updated": null,
+  "auto_updated": "2026-06-01",
   "seed_high_value_keywords": [
     "hydrodynamic simulation",
     "exoplanet discovery",
@@ -81,5 +81,31 @@
     "photoevaporation",
     "core-powered mass loss"
   ],
-  "auto_keywords": []
+  "auto_keywords": [
+    "high energy physics - experiment",
+    "earth and planetary astrophysics",
+    "astrophysics - earth and planetary astrophysics",
+    "solar and stellar astrophysics",
+    "astrophysics - solar and stellar astrophysics",
+    "hadron-hadron scattering",
+    "498",
+    "exoplanet astronomy",
+    "486",
+    "1709",
+    "detector",
+    "1332",
+    "484",
+    "154",
+    "atlas",
+    "exoplanet dynamics",
+    "490",
+    "1711",
+    "instrumentation and methods for astrophysics",
+    "exoplanet detection methods",
+    "astrophysics of galaxies",
+    "489",
+    "491",
+    "natural satellites (extrasolar)",
+    "extrasolar gaseous giant planets"
+  ]
 }
