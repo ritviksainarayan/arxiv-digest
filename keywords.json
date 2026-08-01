@@ -1,6 +1,6 @@
 {
   "_comment": "Curated 'seed_*' lists are maintained by hand and never removed. 'auto_keywords' is appended monthly by update_keywords.py from your (and close collaborators') ADS papers. Edit the seed lists freely; leave auto_keywords to the workflow.",
-  "auto_updated": "2026-07-01",
+  "auto_updated": "2026-08-01",
   "seed_high_value_keywords": [
     "hydrodynamic simulation",
     "exoplanet discovery",
@@ -131,6 +131,31 @@
     "982",
     "2205",
     "185",
-    "1799"
+    "1799",
+    "1629",
+    "1581",
+    "methods: data analysis",
+    "1710",
+    "1580",
+    "proton-proton",
+    "direct imaging",
+    "young star clusters",
+    "techniques: photometric",
+    "stars: double and multiple",
+    "spectra: optical",
+    "physics - instrumentation and detectors",
+    "higgs physics",
+    "heat treatment",
+    "astrophysics - astrophysics of galaxies",
+    "444",
+    "1833",
+    "hadron collider",
+    "hadron",
+    "collider",
+    "top physics",
+    "supersymmetry",
+    "stellar associations",
+    "starspots",
+    "stars: activity"
   ]
 }
