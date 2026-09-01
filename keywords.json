@@ -1,6 +1,6 @@
 {
   "_comment": "Curated 'seed_*' lists are maintained by hand and never removed. 'auto_keywords' is appended monthly by update_keywords.py from your (and close collaborators') ADS papers. Edit the seed lists freely; leave auto_keywords to the workflow.",
-  "auto_updated": "2026-08-01",
+  "auto_updated": "2026-09-01",
   "seed_high_value_keywords": [
     "hydrodynamic simulation",
     "exoplanet discovery",
@@ -156,6 +156,31 @@
     "supersymmetry",
     "stellar associations",
     "starspots",
-    "stars: activity"
+    "stars: activity",
+    "particles and fields",
+    "open star clusters",
+    "1160",
+    "stars: dwarfs",
+    "stars: abundances",
+    "planets and satellites: composition",
+    "planetary migration",
+    "planetary alignment",
+    "particle physics experiments",
+    "materials engineering",
+    "high energy astrophysical phenomena",
+    "extrasolar rocky planets",
+    "exoplanet atmospheric composition",
+    "corrosion",
+    "binaries: eclipsing",
+    "753",
+    "511",
+    "492",
+    "2021",
+    "1577",
+    "1243",
+    "1081",
+    "1063",
+    "boson",
+    "proton-proton collisions"
   ]
 }
